@@ -15,40 +15,27 @@ jobs:
 
       - name: Prepare project
         run: |
-          echo "=== Repo files ==="
-          ls -la
           if [ -f build.gradle ]; then
-            echo "Using project from repo root"
             echo "PROJECT_DIR=." >> $GITHUB_ENV
           else
-            if [ -f BloodySwordAnimations-clean.zip ]; then
-              ZIP=BloodySwordAnimations-clean.zip
-            else
-              ZIP=$(find . -maxdepth 2 -name "*.zip" -not -path "./.git/*" | head -n 1)
-            fi
-            if [ -z "$ZIP" ]; then
-              echo "ERROR: no build.gradle and no zip found in repo"
-              exit 1
-            fi
-            echo "Using zip: $ZIP"
+            ZIP=$(find . -maxdepth 2 -name "*.zip" -not -path "./.git/*" | head -n 1)
+            if [ -z "$ZIP" ]; then echo "ERROR: no zip found"; ls -la; exit 1; fi
             rm -rf project
             unzip -o "$ZIP" -d project
             BG=$(find project -name build.gradle | head -n 1)
-            if [ -z "$BG" ]; then
-              echo "ERROR: build.gradle not found inside the zip"
-              exit 1
-            fi
             echo "PROJECT_DIR=$(dirname "$BG")" >> $GITHUB_ENV
           fi
 
-      - name: Check source version
+      - name: Auto-fix old code for 1.21.11
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          if grep -rn "SwordItem" src; then
-            echo "ERROR: old source code detected (SwordItem). Upload the newest zip."
-            exit 1
-          fi
-          echo "Source looks up to date"
+          MAIN=src/main/java/com/bloodystar/swordanim/BloodySwordAnimations.java
+          MENU=src/main/java/com/bloodystar/swordanim/AnimationMenuScreen.java
+          sed -i 's/import net.minecraft.item.SwordItem;/import net.minecraft.registry.tag.ItemTags;/' $MAIN
+          sed -i 's/getMainHandStack().getItem() instanceof SwordItem/getMainHandStack().isIn(ItemTags.SWORDS)/g' $MAIN
+          sed -i '/renderBackground(context, mouseX, mouseY, delta);/d' $MENU
+          if grep -rn "SwordItem" src; then echo "ERROR: SwordItem still present"; exit 1; fi
+          echo "Code fixed OK"
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
